@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import _linear
+from recurrent.rnn_cell.linear import linear as _linear
 
 
-class SimpleSRUCell(tf.nn.rnn_cell.RNNCell):
+class SimpleSRUCell(tf.contrib.rnn.RNNCell):
     """Implements a simple distribution based recurrent unit that keeps moving
     averages of the mean map embeddings of features of inputs.
     """
@@ -73,5 +73,5 @@ class SimpleSRUCell(tf.nn.rnn_cell.RNNCell):
             if not self._linear_out:
                 output = self._activation(output, name='output_act')
             if self._output_input:
-                output = tf.concat(1, [output, inputs], name='output_concat')
+                output = tf.concat([output, inputs], 1, name='output_concat')
             return (output, out_state)
