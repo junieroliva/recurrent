@@ -184,7 +184,7 @@ class SequenceModel:
             saver = None
         # Main train loop.
         best_loss = None
-        self._sess.run(tf.initialize_all_variables())
+        self._sess.run(tf.global_variables_initializer())
         for i in xrange(self._train_iters):
             # Decay the learning rate.
             if i % self._decay_interval == 0:
