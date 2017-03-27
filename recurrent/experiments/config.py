@@ -4,6 +4,17 @@ import recurrent.experiments.fetchers as fetchers
 from recurrent.model.sequence_model import TRAIN, VALID, TEST
 
 
+def get_default(dictionary, index, default=None):
+    """Simple helper function to get values from dictionary, or returning a
+    default value if the index is not in the dictionary.
+    """
+    try:
+        return dictionary[index]
+    except KeyError:
+        return default
+
+
+# TODO: Refactor this to use a dictionary of default values.
 class BaseConfig:
     def __init__(self,
                  fetcher_args=None,

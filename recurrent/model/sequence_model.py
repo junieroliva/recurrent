@@ -98,11 +98,19 @@ class SequenceModel:
         else:
             initial_state = tf.placeholder(tf.float32, [None, state_size],
                                            'initial_state')
-        input_data = tf.placeholder(input_dtype, [None, window, dim],
-                                    'input_data')
-        targets = tf.placeholder(target_dtype, [None, window, dim], 'targets')
+        if dim is not None:
+            input_data = tf.placeholder(input_dtype, [None, window, dim],
+                                        'input_data')
+            targets = tf.placeholder(target_dtype, [None, window, dim],
+                                     'targets')
+        else:
+            input_data = tf.placeholder(input_dtype, [None, window],
+                                        'input_data')
+            targets = tf.placeholder(target_dtype, [None, window],
+                                     'targets')
         sequence_length = tf.placeholder(tf.int64, [None, ], 'sequnce_length')
         # Make losses based on RNN output.
+        self._cell = cell
         self._sequence_length = sequence_length
         self._input_data = input_data
         self._initial_state = initial_state
@@ -110,6 +118,7 @@ class SequenceModel:
             rnn_input = input_process(input_data)
         else:
             rnn_input = input_data
+        self._rnn_input = rnn_input
         outputs, state = \
             tf.nn.dynamic_rnn(cell, rnn_input, sequence_length=sequence_length,
                               initial_state=initial_state)
@@ -120,6 +129,7 @@ class SequenceModel:
             rnn_targets = target_process(targets)
         else:
             rnn_targets = targets
+        self._rnn_targets = rnn_targets
         if loss_returns_valid:
             self._loss_op, self._valid_op = loss(outputs, rnn_targets,
                                                  sequence_length)
@@ -139,19 +149,28 @@ class SequenceModel:
             sess = tf.Session()
         self._sess = sess
         # Set up fetchers.
+        self._dropout_keeprate = dropout_keeprate
         self._fetchers = fetchers
         for fetcher in self._fetchers:
             if dropout_keeprate is not None:
                 if fetcher == TRAIN:
-                    tensors = {dropout_keeprate: dropout_keeprate_val}
+                    dkr = dropout_keeprate_val
                 else:
-                    tensors = {dropout_keeprate: 1.0}
+                    dkr = 1.0
             else:
-                tensors = {}
-            self._fetchers[fetcher].set_variables(
-                sess, input_data, initial_state, sequence_length,
-                targets, state, cell, tensors
-            )
+                dkr = None
+            self.setup_fetcher(self._fetchers[fetcher], dkr)
+
+    def setup_fetcher(self, fetcher, dropout_keeprate_val=None):
+        if self._dropout_keeprate is not None:
+            tensors = {self._dropout_keeprate: dropout_keeprate_val}
+        else:
+            tensors = {}
+        fetcher.set_variables(
+            self._sess, self._input_data, self._initial_state,
+            self._sequence_length, self._targets, self._state_op, self._cell,
+            tensors
+        )
 
     def update_lr(self):
         self._sess.run(self._lr_update)
@@ -260,3 +279,24 @@ class SequenceModel:
         if return_loss_list:
             return test_loss, test_list
         return test_loss
+
+    def eval_model(self, eval_op, saver=None, save_path=None, fetcher=None,
+                   set_name=TEST, iters=None):
+        # TODO: write doc.
+        if iters is None:
+            iters = self._test_iters
+        if saver is not None and save_path is not None:
+            saver.restore(self._sess, os.path.join(save_path, 'model.ckpt'))
+        test_list = []
+        if fetcher is None:
+            self._fetchers[set_name]
+        try:
+            for j in xrange(iters):
+                out = fetcher.run_iter(eval_op)
+                test_list += [out]
+            # Note: the ultimate division may be off here since the sequence
+            # lengths may not have all been equal
+            j = iters
+        except IndexError:
+            print('REACHED END @ {}'.format(j))
+        return test_list

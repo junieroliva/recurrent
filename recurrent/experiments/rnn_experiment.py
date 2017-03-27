@@ -15,14 +15,14 @@ def main(summary_location, config, cell_class, save_location=None,
             config.make_dropout_keeprate()
         initializer = config.initializer
         cell = cell_class(config)
-        if config.proj_size is None:
-            proj_size = fetchers[TRAIN].dim
-        else:
-            proj_size = config.proj_size
         with tf.variable_scope('model', reuse=None, initializer=initializer):
             if fetchers is None:
                 fetchers = data_loader(data_location, config.batch_sizes,
                                        **config.data_args)
+            if config.proj_size is None:
+                proj_size = fetchers[TRAIN].dim
+            else:
+                proj_size = config.proj_size
             model = seqmodel.SequenceModel(
                 fetchers, cell(proj_size), config.loss,
                 loss_returns_valid=config.loss_returns_valid,
@@ -46,7 +46,8 @@ def main(summary_location, config, cell_class, save_location=None,
 def make_main_helper(summary_base_location, save_base_location,
                      cell_class, default_config_vals={}, status_flags=None,
                      data_location=None, data_loader=None, fetchers=None,
-                     config_class=configs.BaseConfig):
+                     config_class=configs.BaseConfig, main_func=main,
+                     return_loss_dict=True):
     def main_helper(args):
         trial_name = ''
         for attr in args:
@@ -62,18 +63,21 @@ def make_main_helper(summary_base_location, save_base_location,
         save_path = os.path.join(save_base_location, trial_name)
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        loss_val, loss_tst = main(summary_path,
-                                  config,
-                                  cell_class,
-                                  save_path,
-                                  data_location=data_location,
-                                  data_loader=data_loader,
-                                  fetchers=fetchers)
-        result_dict = {'loss': loss_val, 'test_loss': loss_tst}
-        if status_flags is not None:
-            if not np.isnan(loss_val):
-                result_dict['status'] = status_flags[0]
-            else:
-                result_dict['status'] = status_flags[1]
-        return result_dict
+        main_out = main_func(summary_path,
+                             config,
+                             cell_class,
+                             save_path,
+                             data_location=data_location,
+                             data_loader=data_loader,
+                             fetchers=fetchers)
+        if return_loss_dict:
+            loss_val, loss_tst = main_out
+            result_dict = {'loss': loss_val, 'test_loss': loss_tst}
+            if status_flags is not None:
+                if not np.isnan(loss_val):
+                    result_dict['status'] = status_flags[0]
+                else:
+                    result_dict['status'] = status_flags[1]
+            return result_dict
+        return main_out
     return main_helper

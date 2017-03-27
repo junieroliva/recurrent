@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import copy
+import cPickle as pickle
+from recurrent.model.sequence_model import TEST, TRAIN, VALID
 
 
 class WindowedFetcher:
@@ -139,7 +141,10 @@ class WholeFetcher:
     def __init__(self, data, batch_size, window=None, random_shuffle=True,
                  state_is_tuple=False, loop_back=True, shift_sequences=True):
         # Properties.
-        self.dim = data[0].shape[1]
+        if len(data.shape) > 2:
+            self.dim = data[0].shape[1]
+        else:
+            self.dim = None
         self.input_dtype = data[0].dtype
         self.target_dtype = data[0].dtype
         if window is None:
@@ -190,17 +195,30 @@ class WholeFetcher:
         Assumes that self._curr_state_val has the state value of the last
         window for each sequence.
         """
+        # import pdb; pdb.set_trace()  # XXX BREAKPOINT
+        if not self._random_shuffle and len(self._curr_instances) == 0:
+            if self._loop_back:
+                self._curr_instances = range(self._batch_size)
+            else:
+                # TODO: change
+                raise IndexError
         tensors = copy.copy(self._tensors)
-        seq_len_val = np.zeros((self._batch_size, ), np.int64)
-        input_data_val = np.zeros(
-            (self._batch_size, self.window, self.dim), self._dtype
-        )
+        seq_len_val = np.zeros((len(self._curr_instances), ), np.int64)
+        if self.dim is not None:
+            input_data_val = np.zeros(
+                (len(self._curr_instances), self.window, self.dim),
+                self.input_dtype
+            )
+        else:
+            input_data_val = np.zeros(
+                (len(self._curr_instances), self.window), self.input_dtype
+            )
         for i, ci in enumerate(self._curr_instances):
             seq_len_val[i] = len(self._data[ci])
             input_data_val[i] = self._data[ci]
         if self._shift_sequences:
-            tensors[self._input_data] = input_data_val[:, :-1, :]
-            tensors[self._targets] = input_data_val[:, 1:, :]
+            tensors[self._input_data] = input_data_val[:, :-1]
+            tensors[self._targets] = input_data_val[:, 1:]
         else:
             tensors[self._input_data] = input_data_val
             tensors[self._targets] = input_data_val
@@ -217,5 +235,28 @@ class WholeFetcher:
             )
         else:
             max_ind = np.max(self._curr_instances)
-            self._curr_instances = range(max_ind+1, max_ind+1+self._batch_size)
+            n_insts = len(self._data)
+            last_ind = np.minimum(max_ind+1+self._batch_size, n_insts)
+            self._curr_instances = range(max_ind+1, last_ind)
         return result_tuple
+
+
+def make_fetchers(data, batch_sizes,
+                  fetcher_class=WholeFetcher, window=None,
+                  random_shuffle=True, state_is_tuple=False,
+                  shift_sequences=True,
+                  data_loader=lambda x: pickle.load(open(x, 'rb'))):
+    datasets = data_loader(data)
+    fetchers = {TRAIN: None, VALID: None, TEST: None}
+    for dset in datasets:
+        if dset == TEST:
+            loop_back = False
+        else:
+            loop_back = True
+        fetchers[dset] = fetcher_class(datasets[dset], batch_sizes[dset],
+                                       window=window,
+                                       random_shuffle=random_shuffle,
+                                       state_is_tuple=state_is_tuple,
+                                       loop_back=loop_back,
+                                       shift_sequences=shift_sequences)
+    return fetchers
