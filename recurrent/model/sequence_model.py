@@ -134,7 +134,7 @@ class SequenceModel:
             self._loss_op, self._valid_op = loss(outputs, rnn_targets,
                                                  sequence_length)
         else:
-            self._loss_op = loss(outputs, targets, sequence_length)
+            self._loss_op = loss(outputs, rnn_targets, sequence_length)
             self._valid_op = self._loss_op
         # Training operations.
         self._lr = tf.Variable(init_lr, trainable=False)
@@ -160,6 +160,8 @@ class SequenceModel:
             else:
                 dkr = None
             self.setup_fetcher(self._fetchers[fetcher], dkr)
+        # Empty dictionary store easily retrieve tensors.
+        self.model_tensors = {}
 
     def setup_fetcher(self, fetcher, dropout_keeprate_val=None):
         if self._dropout_keeprate is not None:
@@ -289,7 +291,7 @@ class SequenceModel:
             saver.restore(self._sess, os.path.join(save_path, 'model.ckpt'))
         test_list = []
         if fetcher is None:
-            self._fetchers[set_name]
+            fetcher = self._fetchers[set_name]
         try:
             for j in xrange(iters):
                 out = fetcher.run_iter(eval_op)
