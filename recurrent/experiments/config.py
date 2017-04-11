@@ -30,6 +30,7 @@ class BaseConfig:
                  hold_iters=1000,
                  hold_interval=5000,
                  test_iters=1000,
+                 print_iters=100,
                  train_batch=64,
                  valid_batch=64,
                  test_batch=64,
@@ -70,6 +71,7 @@ class BaseConfig:
         self.hold_iters = hold_iters
         self.hold_interval = hold_interval
         self.test_iters = test_iters
+        self.print_iters = print_iters
         self.batch_sizes = {TRAIN: train_batch, VALID: valid_batch,
                             TEST: test_batch}
         self.init_lr = init_lr

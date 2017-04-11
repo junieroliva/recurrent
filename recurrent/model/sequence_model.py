@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import os
-from tensorflow.contrib.rnn import LSTMStateTuple
+from tensorflow.contrib.rnn import LSTMStateTuple # noqa
 
 
 TRAIN = 'train'
@@ -59,6 +59,7 @@ class SequenceModel:
                  state_is_tuple=False,
                  loss_returns_valid=False,
                  input_process=None,
+                 output_process=None,
                  target_process=None,
                  penalty=0.0,
                  max_grad_norm=1e8,
@@ -67,6 +68,7 @@ class SequenceModel:
                  train_iters=100000,
                  hold_iters=1000,
                  test_iters=10000,
+                 print_iters=100,
                  hold_interval=1000,
                  decay_interval=10000,
                  sess=None,
@@ -78,18 +80,19 @@ class SequenceModel:
         # Training parameters.
         self._train_iters = train_iters
         self._valid_iters = hold_iters
+        self._print_iters = print_iters
         self._hold_interval = hold_interval
         self._lr_decay = lr_decay
         self._decay_interval = decay_interval
         self._test_iters = test_iters
         # Make placeholders.
-        dim = fetchers[TRAIN].dim
-        window = fetchers[TRAIN].window
-        input_dtype = fetchers[TRAIN].input_dtype
-        target_dtype = fetchers[TRAIN].target_dtype
+        self._dim = dim = fetchers[TRAIN].dim
+        self._window = window = fetchers[TRAIN].window
+        self._input_dtype = input_dtype = fetchers[TRAIN].input_dtype
+        self._target_dtype = target_dtype = fetchers[TRAIN].target_dtype
         state_size = cell.state_size
         if state_is_tuple:
-            initial_state = LSTMStateTuple(
+            initial_state = (
                 tf.placeholder(tf.float32,
                                [None, state_size[0]], 'initial_state_0'),
                 tf.placeholder(tf.float32,
@@ -124,6 +127,11 @@ class SequenceModel:
                               initial_state=initial_state)
         self._outputs = outputs
         self._state_op = state
+        if output_process is not None:
+            out_proc = output_process(outputs, input_data)
+        else:
+            out_proc = outputs
+        self._out_proc = out_proc
         self._targets = targets
         if target_process is not None:
             rnn_targets = target_process(targets)
@@ -131,10 +139,10 @@ class SequenceModel:
             rnn_targets = targets
         self._rnn_targets = rnn_targets
         if loss_returns_valid:
-            self._loss_op, self._valid_op = loss(outputs, rnn_targets,
+            self._loss_op, self._valid_op = loss(out_proc, rnn_targets,
                                                  sequence_length)
         else:
-            self._loss_op = loss(outputs, rnn_targets, sequence_length)
+            self._loss_op = loss(out_proc, rnn_targets, sequence_length)
             self._valid_op = self._loss_op
         # Training operations.
         self._lr = tf.Variable(init_lr, trainable=False)
@@ -171,13 +179,13 @@ class SequenceModel:
         fetcher.set_variables(
             self._sess, self._input_data, self._initial_state,
             self._sequence_length, self._targets, self._state_op, self._cell,
-            tensors
+            tensors=tensors
         )
 
     def update_lr(self):
         self._sess.run(self._lr_update)
 
-    def main(self, summary_log_path=None, save_path=None, print_iters=100):
+    def main(self, summary_log_path=None, save_path=None):
         """Runs the model on the given data.
         Args:
             summary_log_path: path to save tensorboard summaries.
@@ -186,6 +194,7 @@ class SequenceModel:
         Returns:
             tuple of (best_validation_value, test_validation_value)
         """
+        print_iters = self._print_iters
         # Summarization variables.
         average_pl = tf.placeholder(tf.float32, name='average_pl')
         average_summary = tf.summary.scalar('average_loss', average_pl)

@@ -57,17 +57,21 @@ class GRUCell:
         self._do_dropout = config.dropout_keeprate is not None
         self._dropout_keeprate = config.dropout_keeprate
         self._units = config.units
+        self._num_layers = config.num_layers
 
     def __call__(self, dim):
+        gru_cell = tf.contrib.rnn.GRUCell(self._units)
+        if self._num_layers > 1:
+            gru_cell = tf.contrib.rnn.MultiRNNCell(
+                [gru_cell] * self._num_layers
+            )
         if self._do_dropout:
             return tf.contrib.rnn.OutputProjectionWrapper(
                 tf.contrib.rnn.DropoutWrapper(
-                    tf.contrib.rnn.GRUCell(self._units),
-                    output_keep_prob=self._dropout_keeprate
-                ), dim
+                    gru_cell, output_keep_prob=self._dropout_keeprate), dim
             )
         return tf.contrib.rnn.OutputProjectionWrapper(
-            tf.contrib.rnn.GRUCell(self._units), dim
+            gru_cell, dim
         )
 
 
