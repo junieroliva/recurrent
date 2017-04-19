@@ -15,7 +15,7 @@ def get_default(dictionary, index, default=None):
 
 
 # TODO: Refactor this to use a dictionary of default values.
-class BaseConfig:
+class BaseConfig(object):
     def __init__(self,
                  fetcher_args=None,
                  units=64,
@@ -47,7 +47,10 @@ class BaseConfig:
                  recur_dims=16,
                  alphas=[0.0, 0.25, 0.5, 0.9, 0.99],
                  num_layers=1,
-                 activation=tf.nn.relu):
+                 activation=tf.nn.relu,
+                 do_check=False,
+                 do_static=False,
+                 ):
         if fetcher_args is not None:
             self.fetcher_args = fetcher_args
         else:
@@ -85,6 +88,8 @@ class BaseConfig:
         self._initializer_args = initializer_args
         self.input_process = input_process
         self.target_process = target_process
+        self.do_check = do_check
+        self.do_static = do_static
         # SRU config
         self.num_stats = num_stats
         self.recur_dims = recur_dims

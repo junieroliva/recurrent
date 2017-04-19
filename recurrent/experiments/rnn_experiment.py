@@ -53,9 +53,9 @@ def make_main_helper(summary_base_location, save_base_location,
         for attr in args:
             trial_name += '{}_{}_'.format(attr, args[attr])
         print(trial_name)
-        args_full = copy.copy(args)
-        for attr in default_config_vals:
-            args_full[attr] = default_config_vals[attr]
+        args_full = copy.copy(default_config_vals)
+        for attr in args:
+            args_full[attr] = args[attr]
         config = config_class(**args_full)
         summary_path = os.path.join(summary_base_location, trial_name)
         if not os.path.exists(summary_path):

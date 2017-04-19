@@ -62,6 +62,13 @@ class WindowedFetcher:
         self._final_state_op = state_op
         self._sequence_length = sequence_length
         self._tensors = tensors
+        # Reset indices.
+        if self._random_shuffle:
+            self._curr_instances = np.random.randint(
+                self._ninstances, size=self._batch_size
+            )
+        else:
+            self._curr_instances = range(self._batch_size)
 
     def run_iter(self, eval_tuple, return_state=False):
         """Fetch input/targets based on current indices and window.
@@ -196,6 +203,13 @@ class WholeFetcher:
         self._final_state_op = state_op
         self._sequence_length = sequence_length
         self._tensors = tensors
+        # Reset indices
+        if self._random_shuffle:
+            self._curr_instances = np.random.randint(
+                self._ninstances, size=self._batch_size
+            )
+        else:
+            self._curr_instances = range(self._batch_size)
 
     def run_iter(self, eval_tuple, return_state=False, ):
         """Fetch input/targets based on current indices and window.
@@ -261,6 +275,8 @@ class WholeFetcher:
             n_insts = len(self._data)
             last_ind = np.minimum(max_ind+1+self._batch_size, n_insts)
             self._curr_instances = range(max_ind+1, last_ind)
+            self._zero_state_val = \
+                self._zero_state_val[:len(self._curr_instances)]
         return result_tuple
 
 
@@ -273,13 +289,15 @@ def make_fetchers(data, batch_sizes,
     fetchers = {TRAIN: None, VALID: None, TEST: None}
     for dset in datasets:
         if dset == TEST:
-            loop_back = False
+            loop_back_val = False
+            random_shuffle_val = False
         else:
-            loop_back = True
+            loop_back_val = True
+            random_shuffle_val = random_shuffle
         fetchers[dset] = fetcher_class(datasets[dset], batch_sizes[dset],
                                        window=window,
-                                       random_shuffle=random_shuffle,
+                                       random_shuffle=random_shuffle_val,
                                        state_is_tuple=state_is_tuple,
-                                       loop_back=loop_back,
+                                       loop_back=loop_back_val,
                                        shift_sequences=shift_sequences)
     return fetchers

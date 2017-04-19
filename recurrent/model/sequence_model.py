@@ -76,6 +76,9 @@ class SequenceModel:
                  optimizer_class=tf.train.GradientDescentOptimizer,
                  dropout_keeprate=None,
                  dropout_keeprate_val=1.0,
+                 do_static=False,
+                 do_check=False,
+                 custom_rnn=None,
                  ):
         # Training parameters.
         self._train_iters = train_iters
@@ -117,22 +120,47 @@ class SequenceModel:
         self._sequence_length = sequence_length
         self._input_data = input_data
         self._initial_state = initial_state
+        self._input_process = input_process
         if input_process is not None:
             rnn_input = input_process(input_data)
         else:
             rnn_input = input_data
         self._rnn_input = rnn_input
-        outputs, state = \
-            tf.nn.dynamic_rnn(cell, rnn_input, sequence_length=sequence_length,
-                              initial_state=initial_state)
+        if custom_rnn is not None:
+            outputs, state = \
+                custom_rnn(cell, rnn_input, sequence_length=sequence_length,
+                           initial_state=initial_state)
+        elif do_check or do_static:
+            # Tensorflow has an annoying bug with check_numerics and
+            # dynammic rnns.
+            split_rnn_input = tf.split(
+                rnn_input, int(rnn_input.get_shape()[1]), 1
+            )
+            squeezed_rnn_input = [
+                tf.squeeze(ri, 1) for ri in split_rnn_input
+            ]
+            outputs_list, state = \
+                tf.contrib.rnn.static_rnn(cell, squeezed_rnn_input,
+                                          sequence_length=sequence_length,
+                                          initial_state=initial_state)
+            outputs = tf.concat(
+                [tf.expand_dims(oi, 1) for oi in outputs_list], 1
+            )
+        else:
+            outputs, state = \
+                tf.nn.dynamic_rnn(cell, rnn_input,
+                                  sequence_length=sequence_length,
+                                  initial_state=initial_state)
         self._outputs = outputs
         self._state_op = state
+        self._output_process = output_process
         if output_process is not None:
             out_proc = output_process(outputs, input_data)
         else:
             out_proc = outputs
         self._out_proc = out_proc
         self._targets = targets
+        self._target_process = target_process
         if target_process is not None:
             rnn_targets = target_process(targets)
         else:
@@ -144,6 +172,9 @@ class SequenceModel:
         else:
             self._loss_op = loss(out_proc, rnn_targets, sequence_length)
             self._valid_op = self._loss_op
+        if penalty > 0.0:
+            reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+            self._loss_op += penalty*sum(reg_losses)
         # Training operations.
         self._lr = tf.Variable(init_lr, trainable=False)
         self.tvars = tvars = tf.trainable_variables()
@@ -151,6 +182,10 @@ class SequenceModel:
                                           max_grad_norm)
         optimizer = optimizer_class(self._lr)
         self._train_op = optimizer.apply_gradients(zip(grads, tvars))
+        if do_check:
+            check_op = tf.add_check_numerics_ops()
+            self._train_op = tf.group(self._train_op, check_op,
+                                      tf.check_numerics(self._loss_op, 'poop'))
         self._lr_update = tf.assign(self._lr, self._lr * self._lr_decay)
         # Make session if needed.
         if sess is None:

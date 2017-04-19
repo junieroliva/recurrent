@@ -3,6 +3,7 @@ passed config object.
 """
 import tensorflow as tf
 import recurrent.rnn_cell.sru as sru
+import recurrent.rnn_cell.dummy as dummy
 
 
 class CellScoper(tf.contrib.rnn.RNNCell):
@@ -26,6 +27,19 @@ class CellScoper(tf.contrib.rnn.RNNCell):
     @property
     def output_size(self):
         return self._cell.output_size
+
+
+class DummyCell:
+    """Filler dummy cell."""
+
+    def __init__(self, config):
+        self.num_layers = config.num_layers
+        self.units = config.units
+        self.activation = config.activation
+
+    def __call__(self, dim):
+        return dummy.Dummy(output_size=dim, num_layers=self.num_layers,
+                           units=self.units, activation=self.activation)
 
 
 class LSTMCell:
