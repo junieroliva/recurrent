@@ -146,8 +146,8 @@ class WholeFetcher:
         data: list of n x d arrays
     """
     def __init__(self, data, batch_size, window=None, random_shuffle=True,
-                 state_is_tuple=False, loop_back=True, shift_sequences=True,
-                 label_data=None, append_labels=False):
+                 state_is_tuple=False, loop_back=True, label_data=None,
+                 append_labels=False):
         # Properties.
         if len(data.shape) > 2:
             self.dim = data[0].shape[1]
@@ -173,7 +173,6 @@ class WholeFetcher:
             self._curr_instances = range(batch_size)
         self._state_is_tuple = state_is_tuple
         self._loop_back = loop_back
-        self._shift_sequences = shift_sequences
         self._label_data = label_data
         self._use_labels = label_data is not None
         if self._use_labels:
@@ -221,7 +220,7 @@ class WholeFetcher:
             if self._loop_back:
                 self._curr_instances = range(self._batch_size)
             else:
-                # TODO: change
+                # TODO: change?
                 raise IndexError
         tensors = copy.copy(self._tensors)
         seq_len_val = np.zeros((len(self._curr_instances), ), np.int64)
@@ -243,22 +242,22 @@ class WholeFetcher:
             input_data_val[i] = self._data[ci]
             if self._use_labels:
                 label_data_val[i] = self._label_data[ci]
-        if self._shift_sequences:
+        if self._targets is None:
+            tensors[self._input_data] = input_data_val
+        else:
             tensors[self._input_data] = input_data_val[:, :-1]
             tensors[self._targets] = input_data_val[:, 1:]
-        else:
-            tensors[self._input_data] = input_data_val
-            tensors[self._targets] = input_data_val
-        if self._use_labels:
-            if not self._append_labels:
-                tensors[self._targets] = label_data_val
-            else:
-                tensors[self._input_data] = np.concatenate(
-                    (tensors[self._input_data], label_data_val), axis=1
-                )
-                tensors[self._targets] = np.concatenate(
-                    (tensors[self._targets], label_data_val), axis=1
-                )
+            if self._use_labels:
+                if not self._append_labels:
+                    tensors[self._targets] = label_data_val
+                else:
+                    tensors[self._targets] = np.concatenate(
+                        (tensors[self._targets], label_data_val), axis=1
+                    )
+        if self._use_labels and self._append_labels:
+            tensors[self._input_data] = np.concatenate(
+                (tensors[self._input_data], label_data_val), axis=1
+            )
         tensors[self._sequence_length] = seq_len_val
         tensors[self._initial_state] = self._zero_state_val
         if return_state:

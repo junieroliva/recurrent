@@ -79,6 +79,10 @@ class SequenceModel:
                  do_static=False,
                  do_check=False,
                  custom_rnn=None,
+                 input_data=None,
+                 targets=None,
+                 rnn_input=None,
+                 rnn_targets=None,
                  ):
         # Training parameters.
         self._train_iters = train_iters
@@ -104,16 +108,20 @@ class SequenceModel:
         else:
             initial_state = tf.placeholder(tf.float32, [None, state_size],
                                            'initial_state')
-        if dim is not None:
-            input_data = tf.placeholder(input_dtype, [None, window, dim],
-                                        'input_data')
-            targets = tf.placeholder(target_dtype, [None, window, dim],
-                                     'targets')
-        else:
-            input_data = tf.placeholder(input_dtype, [None, window],
-                                        'input_data')
-            targets = tf.placeholder(target_dtype, [None, window],
-                                     'targets')
+        if input_data is None:
+            if dim is not None:
+                input_data = tf.placeholder(input_dtype, [None, window, dim],
+                                            'input_data')
+            else:
+                input_data = tf.placeholder(input_dtype, [None, window],
+                                            'input_data')
+        if rnn_targets is None and targets is None:
+            if dim is not None:
+                targets = tf.placeholder(target_dtype, [None, window, dim],
+                                         'targets')
+            else:
+                targets = tf.placeholder(target_dtype, [None, window],
+                                         'targets')
         sequence_length = tf.placeholder(tf.int64, [None, ], 'sequnce_length')
         # Make losses based on RNN output.
         self._cell = cell
@@ -121,10 +129,11 @@ class SequenceModel:
         self._input_data = input_data
         self._initial_state = initial_state
         self._input_process = input_process
-        if input_process is not None:
-            rnn_input = input_process(input_data)
-        else:
-            rnn_input = input_data
+        if rnn_input is None:
+            if input_process is not None:
+                rnn_input = input_process(input_data)
+            else:
+                rnn_input = input_data
         self._rnn_input = rnn_input
         if custom_rnn is not None:
             outputs, state = \
@@ -161,10 +170,11 @@ class SequenceModel:
         self._out_proc = out_proc
         self._targets = targets
         self._target_process = target_process
-        if target_process is not None:
-            rnn_targets = target_process(targets)
-        else:
-            rnn_targets = targets
+        if rnn_targets is None:
+            if target_process is not None:
+                rnn_targets = target_process(targets)
+            else:
+                rnn_targets = targets
         self._rnn_targets = rnn_targets
         if loss_returns_valid:
             self._loss_op, self._valid_op = loss(out_proc, rnn_targets,
