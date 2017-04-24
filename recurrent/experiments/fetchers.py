@@ -215,13 +215,13 @@ class WholeFetcher:
         Assumes that self._curr_state_val has the state value of the last
         window for each sequence.
         """
-        # import pdb; pdb.set_trace()  # XXX BREAKPOINT
         if not self._random_shuffle and len(self._curr_instances) == 0:
             if self._loop_back:
                 self._curr_instances = range(self._batch_size)
             else:
                 # TODO: change?
                 raise IndexError
+        # Zeroed variables.
         tensors = copy.copy(self._tensors)
         seq_len_val = np.zeros((len(self._curr_instances), ), np.int64)
         if self.dim is not None:
@@ -237,11 +237,13 @@ class WholeFetcher:
             label_data_val = np.zeros(
                 (len(self._curr_instances), self._label_len), self.target_dtype
             )
+        # Get current instances.
         for i, ci in enumerate(self._curr_instances):
             seq_len_val[i] = len(self._data[ci])
             input_data_val[i] = self._data[ci]
             if self._use_labels:
                 label_data_val[i] = self._label_data[ci]
+        # Set inputs/targets, sequence length, and initial state placeholders.
         if self._targets is None:
             tensors[self._input_data] = input_data_val
         else:
@@ -260,11 +262,13 @@ class WholeFetcher:
             )
         tensors[self._sequence_length] = seq_len_val
         tensors[self._initial_state] = self._zero_state_val
+        # Evaluate given the input tensors.
         if return_state:
             result_tuple = self._sess.run(eval_tuple+(self._final_state_op,),
                                           tensors)
         else:
             result_tuple = self._sess.run(eval_tuple, tensors)
+        # Get next batch of instances.
         if self._random_shuffle:
             self._curr_instances = np.random.randint(
                 self._ninstances, size=self._batch_size
