@@ -50,7 +50,7 @@ def make_main_helper(summary_base_location, save_base_location,
                      return_loss_dict=True):
     def main_helper(args):
         trial_name = ''
-        for attr in args:
+        for attr in np.sort(args.keys()):
             trial_name += '{}_{}_'.format(attr, args[attr])
         print(trial_name)
         args_full = copy.copy(default_config_vals)

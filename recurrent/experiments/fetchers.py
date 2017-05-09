@@ -202,6 +202,9 @@ class WholeFetcher:
         self._final_state_op = state_op
         self._sequence_length = sequence_length
         self._tensors = tensors
+        self.reset_indices()
+
+    def reset_indices(self):
         # Reset indices
         if self._random_shuffle:
             self._curr_instances = np.random.randint(
@@ -286,7 +289,6 @@ class WholeFetcher:
 def make_fetchers(data, batch_sizes,
                   fetcher_class=WholeFetcher, window=None,
                   random_shuffle=True, state_is_tuple=False,
-                  shift_sequences=True,
                   data_loader=lambda x: pickle.load(open(x, 'rb'))):
     datasets = data_loader(data)
     fetchers = {TRAIN: None, VALID: None, TEST: None}
@@ -297,10 +299,9 @@ def make_fetchers(data, batch_sizes,
         else:
             loop_back_val = True
             random_shuffle_val = random_shuffle
-        fetchers[dset] = fetcher_class(datasets[dset], batch_sizes[dset],
-                                       window=window,
-                                       random_shuffle=random_shuffle_val,
-                                       state_is_tuple=state_is_tuple,
-                                       loop_back=loop_back_val,
-                                       shift_sequences=shift_sequences)
+        fetchers[dset] = fetcher_class(
+            datasets[dset], batch_sizes[dset], window=window,
+            random_shuffle=random_shuffle_val, state_is_tuple=state_is_tuple,
+            loop_back=loop_back_val,
+        )
     return fetchers

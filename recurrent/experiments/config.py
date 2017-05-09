@@ -50,6 +50,10 @@ class BaseConfig(object):
                  activation=tf.nn.relu,
                  do_check=False,
                  do_static=False,
+                 momentum=None,
+                 momentum_iter=10000000000,
+                 pretrain_scope=None,
+                 pretrain_iters=5000,
                  ):
         if fetcher_args is not None:
             self.fetcher_args = fetcher_args
@@ -90,6 +94,10 @@ class BaseConfig(object):
         self.target_process = target_process
         self.do_check = do_check
         self.do_static = do_static
+        self.momentum = momentum
+        self.momentum_iter = momentum_iter
+        self.pretrain_scope = pretrain_scope
+        self.pretrain_iters = pretrain_iters
         # SRU config
         self.num_stats = num_stats
         self.recur_dims = recur_dims

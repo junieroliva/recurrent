@@ -83,6 +83,10 @@ class SequenceModel:
                  targets=None,
                  rnn_input=None,
                  rnn_targets=None,
+                 momentum=None,
+                 momentum_iter=10000000000,
+                 pretrain_scope=None,
+                 pretrain_iters=5000,
                  ):
         # Training parameters.
         self._train_iters = train_iters
@@ -187,15 +191,35 @@ class SequenceModel:
             self._loss_op += penalty*sum(reg_losses)
         # Training operations.
         self._lr = tf.Variable(init_lr, trainable=False)
+        optimizer = optimizer_class(self._lr)
         self.tvars = tvars = tf.trainable_variables()
         grads, _ = tf.clip_by_global_norm(tf.gradients(self._loss_op, tvars),
                                           max_grad_norm)
-        optimizer = optimizer_class(self._lr)
         self._train_op = optimizer.apply_gradients(zip(grads, tvars))
         if do_check:
             check_op = tf.add_check_numerics_ops()
             self._train_op = tf.group(self._train_op, check_op,
                                       tf.check_numerics(self._loss_op, 'poop'))
+        if pretrain_scope is not None and pretrain_iters is not None:
+            self._do_pretrain = True
+            self._pretrain_iters = pretrain_iters
+            self.ptvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                            pretrain_scope)
+            ptgrads, _ = tf.clip_by_global_norm(
+                tf.gradients(self._loss_op, self.ptvars), max_grad_norm
+            )
+            self._pretrain_op = optimizer.apply_gradients(
+                zip(ptgrads, self.ptvars)
+            )
+        else:
+            self._do_pretrain = False
+        if momentum is not None:
+            mom_optimizer = tf.train.MomentumOptimizer(self._lr, momentum)
+            self._momentum_op = mom_optimizer.apply_gradients(zip(grads, tvars))
+            self._momentum_iter = momentum_iter
+        else:
+            self._momentum_op = None
+            self._momentum_iter = None
         self._lr_update = tf.assign(self._lr, self._lr * self._lr_decay)
         # Make session if needed.
         if sess is None:
@@ -260,6 +284,21 @@ class SequenceModel:
         # Main train loop.
         best_loss = None
         self._sess.run(tf.global_variables_initializer())
+        # Pretrain if needed.
+        if self._do_pretrain:
+            for i in xrange(self._pretrain_iters):
+                # Run a pretraining iteration.
+                train_loss, _ = self._fetchers[TRAIN].run_iter(
+                    (self._loss_op, self._pretrain_op)
+                )
+                # Abort training if we have NaN loss
+                if np.isnan(train_loss):
+                    return (np.NaN, np.NaN)
+                # Print to screen and save summary.
+                if i % print_iters == 0:
+                    print('Pretrain Iter: {} Train Loss: {}'.format(i,
+                                                                    train_loss))
+        train_operation = self._train_op
         for i in xrange(self._train_iters):
             # Decay the learning rate.
             if i % self._decay_interval == 0:
@@ -268,12 +307,17 @@ class SequenceModel:
                 print('Iter: {} Learning rate: {}'.format(
                     i, self._sess.run(self._lr)
                 ))
+            # Use a momentum operator if it is over the momentum iterations.
+            if self._momentum_op is not None and i == self._momentum_iter:
+                print('Using momentum.')
+                train_operation = self._momentum_op
             # Training.
             # Run a training iteration.
             train_loss, _ = self._fetchers[TRAIN].run_iter(
-                (self._loss_op, self._train_op)
+                (self._loss_op, train_operation)
             )
             # Abort training if we have NaN loss
+            # TODO: use the last saved model with a lower learning rate?
             if np.isnan(train_loss):
                 return (np.NaN, np.NaN)
             # Print to screen and save summary.
