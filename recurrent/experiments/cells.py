@@ -3,6 +3,7 @@ passed config object.
 """
 import tensorflow as tf
 import recurrent.rnn_cell.sru as sru
+import recurrent.rnn_cell.indexed as indexed
 import recurrent.rnn_cell.dummy as dummy
 
 
@@ -164,3 +165,29 @@ class SRUCell:
                 [sru_cell] * self._num_layers
             )
         return tf.contrib.rnn.OutputProjectionWrapper(sru_cell, dim)
+
+
+class IMMECell:
+
+    def __init__(self, config):
+        self._do_dropout = config.dropout_keeprate is not None
+        self._dropout_keeprate = config.dropout_keeprate
+        self._units = config.units
+        self._num_stats = config.num_stats
+        self._num_layers = config.num_layers
+
+    def __call__(self, dim):
+        imme_cell = indexed.SimpleIndexedCell(
+            num_stats=self._num_stats,
+            output_dims=self._units,
+            linear_out=False,
+        )
+        if self._do_dropout:
+            imme_cell = tf.contrib.rnn.DropoutWrapper(
+                imme_cell, output_keep_prob=self._dropout_keeprate
+            )
+        if self._num_layers > 1:
+            imme_cell = tf.contrib.rnn.MultiRNNCell(
+                [imme_cell] * self._num_layers
+            )
+        return tf.contrib.rnn.OutputProjectionWrapper(imme_cell, dim)

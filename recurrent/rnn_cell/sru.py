@@ -68,7 +68,7 @@ class SimpleSRUCell(tf.contrib.rnn.RNNCell):
             else:
                 output_vars = out_state
             output = _linear(
-                output_vars, self._num_stats, True, scope='output'
+                output_vars, self._output_dims, True, scope='output'
             )
             if not self._linear_out:
                 output = self._activation(output, name='output_act')

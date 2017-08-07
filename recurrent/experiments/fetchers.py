@@ -147,7 +147,7 @@ class WholeFetcher:
     """
     def __init__(self, data, batch_size, window=None, random_shuffle=True,
                  state_is_tuple=False, loop_back=True, label_data=None,
-                 append_labels=False):
+                 append_labels=False, truncate_window=True):
         # Properties.
         if len(data.shape) > 2:
             self.dim = data[0].shape[1]
@@ -157,9 +157,14 @@ class WholeFetcher:
         # TODO: adjust accordingly with labels.
         self.target_dtype = data[0].dtype
         if window is None:
-            self.window = np.max([d.shape[0] for d in data])
+            self._truncate_window = truncate_window
+            if truncate_window:
+                self.window = np.max([d.shape[0] for d in data]) - 1
+            else:
+                self.window = np.max([d.shape[0] for d in data])
         else:
             self.window = window
+        # import pdb; pdb.set_trace()  # XXX BREAKPOINT
         # Internal.
         self._data = data
         self._ninstances = len(data)
@@ -191,6 +196,7 @@ class WholeFetcher:
 
     def set_variables(self, sess, input_data, initial_state, sequence_length,
                       targets, state_op, cell, tensors={}):
+        # import pdb; pdb.set_trace()  # XXX BREAKPOINT
         self._zero_state_val = sess.run(
             cell.zero_state(self._batch_size, tf.float32)
         )
@@ -202,6 +208,8 @@ class WholeFetcher:
         self._final_state_op = state_op
         self._sequence_length = sequence_length
         self._tensors = tensors
+#         if targets is not None:
+#             self.window -= 1
         self.reset_indices()
 
     def reset_indices(self):
@@ -218,6 +226,7 @@ class WholeFetcher:
         Assumes that self._curr_state_val has the state value of the last
         window for each sequence.
         """
+        # import pdb; pdb.set_trace()  # XXX BREAKPOINT
         if not self._random_shuffle and len(self._curr_instances) == 0:
             if self._loop_back:
                 self._curr_instances = range(self._batch_size)
@@ -227,14 +236,18 @@ class WholeFetcher:
         # Zeroed variables.
         tensors = copy.copy(self._tensors)
         seq_len_val = np.zeros((len(self._curr_instances), ), np.int64)
+        if self._truncate_window:
+            wval = self.window + 1
+        else:
+            wval = self.window
         if self.dim is not None:
             input_data_val = np.zeros(
-                (len(self._curr_instances), self.window, self.dim),
+                (len(self._curr_instances), wval, self.dim),
                 self.input_dtype
             )
         else:
             input_data_val = np.zeros(
-                (len(self._curr_instances), self.window), self.input_dtype
+                (len(self._curr_instances), wval), self.input_dtype
             )
         if self._use_labels:
             label_data_val = np.zeros(
@@ -252,6 +265,7 @@ class WholeFetcher:
         else:
             tensors[self._input_data] = input_data_val[:, :-1]
             tensors[self._targets] = input_data_val[:, 1:]
+            seq_len_val -= 1
             if self._use_labels:
                 if not self._append_labels:
                     tensors[self._targets] = label_data_val
